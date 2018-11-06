@@ -370,12 +370,18 @@ public class JsonUtils {
 
 	public static void main(String[] args) throws Exception
 	{
-		String data = new String(Files.readAllBytes(Paths.get(args[0])));
+		String data;
 		JElem     obj;
 		JElemType obj_type;
-		String field_name = args[1];
+		String field_name;
 		int i;
 
+		if (args.length != 2) {
+			System.out.println("Usage: java JsonUtils <file-name> <filed-name>");
+			return;
+		}
+		data = new String(Files.readAllBytes(Paths.get(args[0])));
+		field_name = args[1];
 		// Check if the required object is present.
 		//if (!is_valid_member(data, "formed"))
 		//	return null;
