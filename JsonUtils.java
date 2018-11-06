@@ -211,6 +211,60 @@ public class JsonUtils {
 		}
 	}
 
+	static class obj_elem extends JElem {
+		public obj_elem(int obj_start, String name, String parent)
+		{
+			super(obj_start, name, parent);
+			this.je_type = super.je_type.JT_ARRAY;
+			je_len_calc();
+			je_val_extract();
+		}
+		void je_len_calc()
+		{
+			int i;
+			int bcount;
+
+			i = this.je_start;
+			while (i < this.je_parent.length()) {
+				if (this.je_parent.charAt(i) == '{') 
+					break;
+				++i;
+			}
+			if (i == this.je_parent.length()) {
+				this.je_len = -1;
+				return;
+			}
+			bcount = 1;
+			++i;
+			while (i < this.je_parent.length()) {
+				if (this.je_parent.charAt(i) == '{')
+					++bcount;
+				else if (this.je_parent.charAt(i) == '}')
+					--bcount;
+				if (bcount == 0)
+					break;
+				++i;
+			}
+			if (bcount != 0) {
+				System.out.println("Invalid format for " + this.je_name);
+				return;
+			}
+			this.je_len = i - this.je_start + 1;
+		}
+		void je_val_extract()
+		{
+			int    i;
+			String parent = this.je_parent;
+			//String  search_string = "\[[^\[]*\]]";
+			String  search_string = "\\{";
+			Pattern pattern = Pattern.compile(search_string);
+			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
+									   parent.length()));
+			if (matcher.find()) {
+				this.je_content = parent.substring(this.je_start + matcher.start(), this.je_start + this.je_len);
+			}
+		}
+	}
 	public static JElem json_elem_create(String json, String obj_name,
 					    JElemType obj_type)
 	{
@@ -240,9 +294,13 @@ public class JsonUtils {
 				obj = new arr_elem(matcher.start(), obj_name,
 						   json);
 				break;
+			case JT_OBJ:
+				obj = new obj_elem(matcher.start(), obj_name,
+						   json);
+				break;
 			default:
-				obj =  new bool_elem(matcher.start(), obj_name,
-						     json);
+				System.out.println("Invalid input type");
+				return null;
 		}
 		return obj;
 	}
@@ -312,10 +370,10 @@ public class JsonUtils {
 
 	public static void main(String[] args) throws Exception
 	{
-		String data = new String(Files.readAllBytes(Paths.get("example.json")));
+		String data = new String(Files.readAllBytes(Paths.get(args[0])));
 		JElem     obj;
 		JElemType obj_type;
-		String field_name = args[0];
+		String field_name = args[1];
 		int i;
 
 		// Check if the required object is present.
