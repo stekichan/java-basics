@@ -1,11 +1,11 @@
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.nio.file.*;;
 
 public class JsonUtils {
 	public enum JElemType {
 		JT_OBJ,
 		JT_ARRAY,
-		JT_VAL,
 		JT_STRING,
 		JT_NUM,
 		JT_BOOL,
@@ -46,9 +46,11 @@ public class JsonUtils {
 
 			i = this.je_start;
 			// Both "true" and "false" end in "e".
-			while (i < this.je_parent.length() &&
-					this.je_parent.charAt(i) != 'e')
+			while (i < this.je_parent.length()) {
+				if (this.je_parent.charAt(i) == 'e')
+					break;
 				++i;
+			}
 			if (i == this.je_parent.length())
 				this.je_len = -1;
 			else
@@ -59,10 +61,12 @@ public class JsonUtils {
 			int i;
 
 			i = this.je_start;
-			while (i < this.je_parent.length() &&
-			       this.je_parent.substring(i, i + 3) != "true" ||
-			       this.je_parent.substring(i, i + 4) != "false")
+			while (i < this.je_parent.length()) {
+				if (this.je_parent.substring(i, i + 4).equals("true") ||
+			            this.je_parent.substring(i, i + 5).equals("false"))
+					break;
 				++i;
+			}
 			if (i == this.je_parent.length())
 				; // handle error
 			if (this.je_parent.charAt(i) == 't')
@@ -84,10 +88,12 @@ public class JsonUtils {
 			int i;
 
 			i = this.je_start;
-			while (i < this.je_parent.length() &&
-					(this.je_parent.charAt(i) != ',' ||
-					 this.je_parent.charAt(i) != '\n'))
+			while (i < this.je_parent.length()) {
+				if (this.je_parent.charAt(i) == ',' ||
+				    this.je_parent.charAt(i) == '\n')
+					break;
 				++i;
+			}
 			if (i == this.je_parent.length())
 				this.je_len = -1;
 			else
@@ -97,16 +103,59 @@ public class JsonUtils {
 		{
 			int i;
 			String parent = this.je_parent;
+
 			// Leaving out the case of exponentials and negative
 			String search_string = "-?[1-9]\\d*|0";
 			Pattern pattern = Pattern.compile(search_string);
 			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
-							  parent.length()));
-			matcher.find();
-			this.je_content = parent.substring(matcher.start(), matcher.end());
+							  parent.length() - 1));
+			if (matcher.find()) {
+				this.je_content = matcher.group();
+			}
 		}
 	}
+	static class string_elem extends JElem {
+		public string_elem(int obj_start, String name, String parent)
+		{
+			super(obj_start, name, parent);
+			this.je_type = super.je_type.JT_STRING;
+			je_len_calc();
+			je_val_extract();
+		}
+		void je_len_calc()
+		{
+			int i;
 
+			i = this.je_start;
+			while (i < this.je_parent.length()) {
+				if ((this.je_parent.charAt(i) == ',' &&
+				      this.je_parent.charAt(i - 1) == '\"' &&
+				      i != this.je_start + 1) ||
+				    this.je_parent.charAt(i) == '\n')
+					break;
+				++i;
+			}
+			if (i == this.je_parent.length())
+				this.je_len = -1;
+			else
+				this.je_len =  i - this.je_start;
+		}
+		void je_val_extract()
+		{
+			int    i;
+			String parent = this.je_parent;
+			//borrowed from https://stackoverflow.com/questions/1473155/how-to-get-data-between-quotes-in-java
+			String  search_string = "\"([^\"]*)\"";
+			Pattern pattern = Pattern.compile(search_string);
+			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
+							  parent.length() - 1));
+			// Skip the name of the field
+			matcher.find();
+			if (matcher.find()) {
+				this.je_content = matcher.group();
+			}
+		}
+	}
 	public static JElem json_elem_create(String json, String obj_name,
 					    JElemType obj_type)
 	{
@@ -114,6 +163,7 @@ public class JsonUtils {
 		Pattern pattern = Pattern.compile(search_string);
 		Matcher matcher = pattern.matcher(json);
 		JElem   obj;
+		num_elem nobj;
 
 		matcher.find();
 
@@ -123,8 +173,14 @@ public class JsonUtils {
 						     json);
 				break;
 			case JT_NUM:
-				obj = (JElem) new num_elem(matcher.start(),
-							   obj_name, json);
+				nobj =  new num_elem(matcher.start(),
+						    obj_name, json);
+				obj = nobj;
+				break;
+			case JT_STRING:
+				obj = new string_elem(matcher.start(), obj_name,
+						      json);
+
 				break;
 			default:
 				obj =  new bool_elem(matcher.start(), obj_name,
@@ -173,6 +229,7 @@ public class JsonUtils {
 		Pattern   pattern       = Pattern.compile(search_string);
 		Matcher   matcher       = pattern.matcher(json);
 
+		matcher.find();
 		// Remove the white space till the first non-trivial character
 		i = matcher.end() + 1;
 		while (i < json.length() && json.charAt(i) == ' ')
@@ -195,22 +252,23 @@ public class JsonUtils {
 		return obj_type;
 	}
 
-	public static String getJsonObj(String json, String obj_name)
+	public static void main(String[] args) throws Exception
 	{
-		int       obj_start;
-		int       obj_len;
+		String data = new String(Files.readAllBytes(Paths.get("example.json")));
 		JElem     obj;
 		JElemType obj_type;
+		String field_name = args[0];
+		int i;
 
 		// Check if the required object is present.
-		if (!is_valid_member(json, obj_name))
-			return null;
+		//if (!is_valid_member(data, "formed"))
+		//	return null;
 		// Identify the type of the required object.
-		obj_type = elem_type_identify(json, obj_name);
-		if (obj_type == JElemType.JT_INVAL)
-			return null;
+		obj_type = elem_type_identify(data, field_name);
+		//if (obj_type == JElemType.JT_INVAL)
+		//	return null;
 		// Create an instance of required object type.
-		obj = json_elem_create(json, obj_name, obj_type);
-		return obj.je_content;
+		obj = json_elem_create(data, field_name, obj_type);
+		System.out.println(obj.je_content);
 	}
 }
