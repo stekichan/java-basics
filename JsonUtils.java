@@ -199,6 +199,7 @@ public class JsonUtils {
 		void je_val_extract()
 		{
 			int    i;
+			int    j;
 			String parent = this.je_parent;
 			//String  search_string = "\[[^\[]*\]]";
 			String  search_string = "\\[";
@@ -206,6 +207,8 @@ public class JsonUtils {
 			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
 									   parent.length()));
 			if (matcher.find()) {
+				for (i = this.je_start + matcher.start() + 1; parent.charAt(i) == ' ' || parent.charAt(i) == '\n'; ++i);
+				System.out.println(String.valueOf(this.je_start) + " " + String.valueOf(this.je_len) + " " + String.valueOf(matcher.start()));
 				this.je_content = parent.substring(this.je_start + matcher.start(), this.je_start + this.je_len);
 			}
 		}
@@ -289,14 +292,17 @@ public class JsonUtils {
 			case JT_STRING:
 				obj = new string_elem(matcher.start(), obj_name,
 						      json);
+				System.out.println("String found ");
 				break;
 			case JT_ARRAY:
 				obj = new arr_elem(matcher.start(), obj_name,
 						   json);
+				System.out.println("Array found ");
 				break;
 			case JT_OBJ:
 				obj = new obj_elem(matcher.start(), obj_name,
 						   json);
+				System.out.println("Obj found ");
 				break;
 			default:
 				System.out.println("Invalid input type");
@@ -347,7 +353,7 @@ public class JsonUtils {
 
 		matcher.find();
 		// Remove the white space till the first non-trivial character
-		i = matcher.end() + 1;
+		i = matcher.end();
 		while (i < json.length() && json.charAt(i) == ' ')
 			++i;
 		if (i == json.length()) {
