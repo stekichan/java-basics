@@ -118,19 +118,7 @@ public class JsonUtils {
 		}
 		void je_len_calc()
 		{
-			int i;
 
-			i = this.je_start;
-			while (i < this.je_parent.length()) {
-				if (this.je_parent.charAt(i) == ',' ||
-						this.je_parent.charAt(i) == '\n')
-					break;
-				++i;
-			}
-			if (i == this.je_parent.length())
-				this.je_len = -1;
-			else
-				this.je_len =  i - this.je_start;
 		}
 		void je_val_extract()
 		{
@@ -157,6 +145,10 @@ public class JsonUtils {
 		}
 		void je_len_calc()
 		{
+
+		}
+		void je_val_extract()
+		{
 			int i;
 			int colan_idx;
 			// Borrowed from https://stackoverflow.com/questions/2498635/java-regex-for-matching-quoted-string-with-escaped-quotes/2498670
@@ -179,10 +171,6 @@ public class JsonUtils {
 					System.out.println("Pattern not found");
 				}
 			}
-		}
-		void je_val_extract()
-		{
-
 		}
 	}
 	static class arr_elem extends JElem {
