@@ -1,7 +1,3 @@
-package com.udacity.sandwichclub.utils;
-
-import com.udacity.sandwichclub.model.Sandwich;
-
 import java.util.Arrays;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
@@ -9,6 +5,7 @@ import java.lang.reflect.Array;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Scanner;
+import java.nio.file.*;
 
 public class JsonUtils {
 	public enum JElemType {
@@ -39,6 +36,26 @@ public class JsonUtils {
 		}
 		abstract void je_len_calc();
 		abstract void je_val_extract();
+	}
+
+	static String content_process(String input)
+	{
+		int    i;
+		int    j;
+		char[] output = new char[input.length()];
+
+		for (i = 0, j = 0; i < input.length(); ++i) {
+			// Skip the quotes at the start and end
+			if (input.charAt(i) == '"' &&
+			    (i == 0 || i == input.length() - 1))
+				continue;
+			// Only handles the case of \" and \\.
+			if (input.charAt(i) == '\\')
+				continue;
+			output[j] = input.charAt(i);
+			++j;
+		}
+		return new String(output);
 	}
 
 	// Helper to determine if a character at given index is
@@ -141,6 +158,7 @@ public class JsonUtils {
 		void je_len_calc()
 		{
 			int i;
+			int colan_idx;
 			// Borrowed from https://stackoverflow.com/questions/2498635/java-regex-for-matching-quoted-string-with-escaped-quotes/2498670
 			String  search_string ="'([^\\\\']+|\\\\([btnfr\"'\\\\]|[0-3]?[0-7]{1,2}|u[0-9a-fA-F]{4}))*'|\"([^\\\\\"]+|\\\\([btnfr\"'\\\\]|[0-3]?[0-7]{1,2}|u[0-9a-fA-F]{4}))*\"";
 			Pattern pattern = Pattern.compile(search_string);
@@ -148,14 +166,14 @@ public class JsonUtils {
 			i = this.je_start;
 			while (this.je_parent.charAt(i) != ':')
 				++i;
-			System.out.println("Char present at " + String.valueOf(i) + " is " + this.je_parent.substring(i, i + 1));
 			if (i == this.je_parent.length())
 				this.je_len = -1;
 			else {
-				matcher = pattern.matcher(this.je_parent.substring(i, this.je_parent.length()));
+				colan_idx = i;
+				matcher = pattern.matcher(this.je_parent.substring(colan_idx, this.je_parent.length()));
 				if (matcher.find()) {
-					this.je_len = matcher.end() + i - this.je_start;
-					System.out.println(matcher.group());
+					this.je_len = matcher.end() + colan_idx - this.je_start;
+					this.je_content = content_process(matcher.group());
 				} else {
 					this.je_len = -1;
 					System.out.println("Pattern not found");
@@ -164,20 +182,7 @@ public class JsonUtils {
 		}
 		void je_val_extract()
 		{
-			int    i;
-			System.out.println("Length is: " + String.valueOf(this.je_len));
-			String parent = this.je_parent;
-			//borrowed from https://stackoverflow.com/questions/1473155/how-to-get-data-between-quotes-in-java
-			String  search_string = "\"([^\"]*)\"";
-			Pattern pattern = Pattern.compile(search_string);
-			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
-						this.je_start + this.je_len - 1));
-			// Skip the name of the field
-			matcher.find();
-			if (matcher.find()) {
-				this.je_content = matcher.group();
-				System.out.println("Contents are: " + this.je_content);
-			}
+
 		}
 	}
 	static class arr_elem extends JElem {
@@ -215,7 +220,6 @@ public class JsonUtils {
 				++i;
 			}
 			if (bcount != 0) {
-				System.out.println("Invalid format for " + this.je_name);
 				return;
 			}
 			this.je_len = i - this.je_start + 1;
@@ -316,9 +320,7 @@ public class JsonUtils {
 				break;
 			case JT_STRING:
 				obj = new string_elem(matcher.start(), obj_name,
-						json);
-				if (obj_name.equals("description"))
-					System.out.println("Description is: " + json);
+						      json);
 				break;
 			case JT_ARRAY:
 				obj = new arr_elem(matcher.start(), obj_name,
