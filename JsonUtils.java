@@ -38,6 +38,14 @@ public class JsonUtils {
 		abstract void je_val_extract();
 	}
 
+	static Matcher ju_pattern_search(String search_string, String parent,
+					 int start, int end)
+	{
+		Pattern pattern = Pattern.compile(search_string);
+
+		return  pattern.matcher(parent.substring(start, end));
+	}
+
 	static String content_process(String input)
 	{
 		int    i;
@@ -58,13 +66,6 @@ public class JsonUtils {
 		return new String(output);
 	}
 
-	// Helper to determine if a character at given index is
-	// either of whitespace/tab/nextline.
-	static Boolean can_be_skipped(String input, int i)
-	{
-		return input.charAt(i) == '\t' || input.charAt(i) == ' ' || input.charAt(i) == '\n';
-	}
-
 	static class bool_elem extends JElem {
 		bool_elem(int obj_start, String name, String parent)
 		{
@@ -75,37 +76,47 @@ public class JsonUtils {
 		}
 		void je_len_calc()
 		{
-			int i;
-
-			i = this.je_start;
-			// Both "true" and "false" end in "e".
-			while (i < this.je_parent.length()) {
-				if (this.je_parent.charAt(i) == 'e')
-					break;
-				++i;
-			}
-			if (i == this.je_parent.length())
-				this.je_len = -1;
-			else
-				this.je_len = i - this.je_start + 1;
+		// Not required
 		}
 		void je_val_extract()
 		{
-			int i;
+			int     i;
+			int     comma_idx;
+			int     nxt_line_idx;
+			int     min_idx;
+			Matcher matcher;
+			String  parent = this.je_parent;
 
-			i = this.je_start;
-			while (i < this.je_parent.length()) {
-				if (this.je_parent.substring(i, i + 4).equals("true") ||
-						this.je_parent.substring(i, i + 5).equals("false"))
-					break;
-				++i;
-			}
-			if (i == this.je_parent.length())
-				; // handle error
-			if (this.je_parent.charAt(i) == 't')
-				this.je_content = "true";
+			matcher = ju_pattern_search(",", parent,
+						    this.je_start,
+						    parent.length() - 1);
+			if (matcher.find())
+				comma_idx = matcher.start();
 			else
-				this.je_content = "false";
+				comma_idx = Integer.MAX_VALUE;
+
+			matcher = ju_pattern_search("\n", parent,
+						    this.je_start,
+						    parent.length() - 1);
+
+			if (matcher.find())
+				nxt_line_idx = matcher.start();
+			else
+				nxt_line_idx = Integer.MAX_VALUE;
+			if (nxt_line_idx == comma_idx) {
+				this.je_content = "Input string is invalid";
+				return;
+			}
+			min_idx = Math.min(comma_idx, nxt_line_idx);
+			matcher = ju_pattern_search("(true|false)", parent,
+						    this.je_start,
+						    this.je_start + min_idx);
+			if (matcher.find()) {
+				this.je_content = matcher.group();
+				return;
+			}
+			this.je_content = "Input string is invalid";
+			return;
 		}
 	}
 	static class num_elem extends JElem {
@@ -118,7 +129,7 @@ public class JsonUtils {
 		}
 		void je_len_calc()
 		{
-
+			// Not required.
 		}
 		void je_val_extract()
 		{
@@ -129,10 +140,11 @@ public class JsonUtils {
 			String search_string = "-?[1-9]\\d*|0";
 			Pattern pattern = Pattern.compile(search_string);
 			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
-						parent.length() - 1));
+							  parent.length() - 1));
 			if (matcher.find()) {
 				this.je_content = matcher.group();
-			}
+			} else
+				this.je_content = "Input string is invalid";
 		}
 	}
 	static class string_elem extends JElem {
@@ -145,34 +157,34 @@ public class JsonUtils {
 		}
 		void je_len_calc()
 		{
-
+			// Not required
 		}
 		void je_val_extract()
 		{
 			int i;
-			int colan_idx;
+			int colon_idx;
 			// Borrowed from https://stackoverflow.com/questions/2498635/java-regex-for-matching-quoted-string-with-escaped-quotes/2498670
 			String  search_string ="'([^\\\\']+|\\\\([btnfr\"'\\\\]|[0-3]?[0-7]{1,2}|u[0-9a-fA-F]{4}))*'|\"([^\\\\\"]+|\\\\([btnfr\"'\\\\]|[0-3]?[0-7]{1,2}|u[0-9a-fA-F]{4}))*\"";
 			Pattern pattern = Pattern.compile(search_string);
 			Matcher matcher;
 			i = this.je_start;
-			while (this.je_parent.charAt(i) != ':')
+			// Get over the name of the field.
+			while (i < this.je_parent.length() &&
+			       this.je_parent.charAt(i) != ':')
 				++i;
-			if (i == this.je_parent.length())
-				this.je_len = -1;
-			else {
-				colan_idx = i;
-				matcher = pattern.matcher(this.je_parent.substring(colan_idx, this.je_parent.length()));
+			if (i < this.je_parent.length()) {
+				colon_idx = i;
+				matcher = pattern.matcher(this.je_parent.substring(colon_idx, this.je_parent.length()));
 				if (matcher.find()) {
-					this.je_len = matcher.end() + colan_idx - this.je_start;
 					this.je_content = content_process(matcher.group());
-				} else {
-					this.je_len = -1;
-					System.out.println("Pattern not found");
+					return;
 				}
 			}
+			this.je_content = "Input string is invalid";
+			return;
 		}
 	}
+
 	static class arr_elem extends JElem {
 		public arr_elem(int obj_start, String name, String parent)
 		{
@@ -215,19 +227,17 @@ public class JsonUtils {
 		void je_val_extract()
 		{
 			int    i;
-			int    j;
 			String parent = this.je_parent;
-			//String  search_string = "\[[^\[]*\]]";
 			String  search_string = "\\[";
 			Pattern pattern = Pattern.compile(search_string);
 			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
-						parent.length()));
+									   parent.length()));
 			if (matcher.find()) {
-				for (i = this.je_start + matcher.start() + 1; i < parent.length() && can_be_skipped(parent, i); ++i);
-				for (j = this.je_start + this.je_len - 2; j > -1 && can_be_skipped(parent, j); --j);
-				//this.je_content = parent.substring(this.je_start + matcher.start(), this.je_start + this.je_len);
-				this.je_content = parent.substring(i, j + 1);
-			}
+				this.je_content =
+					parent.substring(this.je_start + matcher.start(),
+							 this.je_start + this.je_len);
+			} else
+				System.out.println("Invalid JSON format");
 		}
 
 	}
@@ -280,27 +290,27 @@ public class JsonUtils {
 			String  search_string = "\\{";
 			Pattern pattern = Pattern.compile(search_string);
 			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
-						parent.length()));
+									   parent.length()));
 			if (matcher.find()) {
-				this.je_content = parent.substring(this.je_start + matcher.start(), this.je_start + this.je_len);
+				this.je_content =
+					parent.substring(this.je_start + matcher.start(), this.je_start + this.je_len);
 			}
 		}
 	}
 	public static JElem json_elem_create(String json, String obj_name,
-			JElemType obj_type)
+					     JElemType obj_type)
 	{
 		String  search_string = "\"" + obj_name + "\"" + ":";
 		Pattern pattern = Pattern.compile(search_string);
 		Matcher matcher = pattern.matcher(json);
 		JElem   obj;
-		num_elem nobj;
 
 		matcher.find();
 
 		switch (obj_type) {
 			case JT_BOOL:
 				obj = new bool_elem(matcher.start(), obj_name,
-						json);
+						    json);
 				break;
 			case JT_NUM:
 				obj = new num_elem(matcher.start(),
@@ -336,14 +346,9 @@ public class JsonUtils {
 
 	private static Boolean is_bool(String json, int i)
 	{
-		String str = json.substring(i, i + 3);
-
-		if (json.substring(i, i + 3) == "true")
-			return true;
-		else if (json.substring(i, i + 4) == "false")
-			return true;
-		else
-			return false;
+		Matcher matcher = ju_pattern_search("true|false", json, i,
+						    i + 5);
+		return matcher.find();
 	}
 
 	private static Boolean is_num(String json, int i)
@@ -367,10 +372,15 @@ public class JsonUtils {
 		Boolean   found;
 
 		found = matcher.find();
+		if (!found) {
+			obj_type = JElemType.JT_INVAL;
+		}
 		// Remove the white space till the first non-trivial character
 		i = matcher.end();
-		while (i < json.length() && json.charAt(i) == ' ')
+		while (i < json.length() &&
+		       json.charAt(i) == ' ' || json.charAt(i) == '\t') {
 			++i;
+		}
 		if (i == json.length()) {
 			obj_type = JElemType.JT_INVAL;
 			return obj_type;
@@ -384,8 +394,9 @@ public class JsonUtils {
 			obj_type = JElemType.JT_BOOL;
 		else if (is_num(json, i))
 			obj_type = JElemType.JT_NUM;
-		else
+		else {
 			obj_type = JElemType.JT_INVAL;
+		}
 		return obj_type;
 	}
 
@@ -412,6 +423,9 @@ public class JsonUtils {
 		//	return null;
 		// Create an instance of required object type.
 		obj = json_elem_create(data, field_name, obj_type);
-		System.out.println(obj.je_content);
+		if (obj == null)
+			System.out.println("invalid input string");
+		else
+			System.out.println(obj.je_content);
 	}
 }
