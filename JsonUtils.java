@@ -353,13 +353,8 @@ public class JsonUtils {
 
 	private static Boolean is_num(String json, int i)
 	{
-		// A negative literal
-		if (json.charAt(i) == '-')
-			return true;
-		else if (json.charAt(i) >= '0' && json.charAt(i) <= '9')
-			return true;
-		else
-			return false;
+		return json.charAt(i) == '-' ||
+		   (json.charAt(i) >= '0' && json.charAt(i) <= '9');
 	}
 
 	public static JElemType elem_type_identify(String json,  String obj_name)
@@ -373,7 +368,7 @@ public class JsonUtils {
 
 		found = matcher.find();
 		if (!found) {
-			obj_type = JElemType.JT_INVAL;
+			return JElemType.JT_INVAL;
 		}
 		// Remove the white space till the first non-trivial character
 		i = matcher.end();
