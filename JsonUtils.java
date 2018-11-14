@@ -87,6 +87,10 @@ public class JsonUtils {
 			Matcher matcher;
 			String  parent = this.je_parent;
 
+			/*
+			 * Two possible terminations that we take into
+			 * consideration are comma and next-line.
+			 */
 			matcher = ju_pattern_search(",", parent,
 						    this.je_start,
 						    parent.length() - 1);
@@ -199,6 +203,13 @@ public class JsonUtils {
 			int bcount;
 
 			i = this.je_start;
+			/*
+			 * Search the starting marker of array.
+			 *
+			 * @todo: Handle the case of invalid JSON
+			 * format in which non-space characters are
+			 * present in ':' and '['
+			 */
 			while (i < this.je_parent.length()) {
 				if (this.je_parent.charAt(i) == '[')
 					break;
@@ -208,6 +219,10 @@ public class JsonUtils {
 				this.je_len = -1;
 				return;
 			}
+			/*
+			 * bcount acts as a stack, increment is equivalent
+			 * to push and decrement to pop.
+			 */
 			bcount = 1;
 			++i;
 			while (i < this.je_parent.length()) {
@@ -215,19 +230,26 @@ public class JsonUtils {
 					++bcount;
 				else if (this.je_parent.charAt(i) == ']')
 					--bcount;
+				/*
+				 * We might have an inappropriate ']' placed
+				 * at (i+1)st location, but we do not bother
+				 * to handle it. Eg. [ ]]
+				 */
 				if (bcount == 0)
 					break;
 				++i;
 			}
 			if (bcount != 0) {
+				this.je_len = -1;
+				System.out.println("']' missing in array definition");
 				return;
 			}
 			this.je_len = i - this.je_start + 1;
 		}
 		void je_val_extract()
 		{
-			int    i;
-			String parent = this.je_parent;
+			int     i;
+			String  parent = this.je_parent;
 			String  search_string = "\\[";
 			Pattern pattern = Pattern.compile(search_string);
 			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
@@ -250,6 +272,7 @@ public class JsonUtils {
 			je_len_calc();
 			je_val_extract();
 		}
+		/* @todo: Factor out a function common to both array and a general object. */
 		void je_len_calc()
 		{
 			int i;
@@ -284,9 +307,8 @@ public class JsonUtils {
 		}
 		void je_val_extract()
 		{
-			int    i;
-			String parent = this.je_parent;
-			//String  search_string = "\[[^\[]*\]]";
+			int     i;
+			String  parent = this.je_parent;
 			String  search_string = "\\{";
 			Pattern pattern = Pattern.compile(search_string);
 			Matcher matcher = pattern.matcher(parent.substring(this.je_start,
@@ -304,8 +326,15 @@ public class JsonUtils {
 		Pattern pattern = Pattern.compile(search_string);
 		Matcher matcher = pattern.matcher(json);
 		JElem   obj;
+		Boolean found;
 
-		matcher.find();
+
+		found = matcher.find();
+		/*
+		 * Since object type has been identified existence of obj-name is
+		 * guaranteed to be present.
+		 */
+		assert found;
 
 		switch (obj_type) {
 			case JT_BOOL:
@@ -314,7 +343,7 @@ public class JsonUtils {
 				break;
 			case JT_NUM:
 				obj = new num_elem(matcher.start(),
-						obj_name, json);
+						   obj_name, json);
 				break;
 			case JT_STRING:
 				obj = new string_elem(matcher.start(), obj_name,
@@ -322,11 +351,11 @@ public class JsonUtils {
 				break;
 			case JT_ARRAY:
 				obj = new arr_elem(matcher.start(), obj_name,
-						json);
+						   json);
 				break;
 			case JT_OBJ:
 				obj = new obj_elem(matcher.start(), obj_name,
-						json);
+						   json);
 				break;
 			default:
 				System.out.println("Invalid input type");
@@ -337,7 +366,10 @@ public class JsonUtils {
 
 	private static Boolean is_valid_member(String json, String obj_name)
 	{
-		// Assumed that there is no white-space after "
+		/*
+		 * Assumed that there is no white-space after \".
+		 * @todo: Use a proper regex instead.
+		 */
 		String  search_string = "\"" + obj_name + "\"" + ":";
 		Pattern pattern       = Pattern.compile(search_string);
 		Matcher matcher       = pattern.matcher(json);
@@ -364,22 +396,18 @@ public class JsonUtils {
 		String    search_string = "\"" + obj_name + "\"" + ":";
 		Pattern   pattern       = Pattern.compile(search_string);
 		Matcher   matcher       = pattern.matcher(json);
-		Boolean   found;
 
-		found = matcher.find();
-		if (!found) {
+		if (!matcher.find())
 			return JElemType.JT_INVAL;
-		}
-		// Remove the white space till the first non-trivial character
+		/* Remove the white space till the first non-trivial character. */
 		i = matcher.end();
 		while (i < json.length() &&
 		       json.charAt(i) == ' ' || json.charAt(i) == '\t') {
 			++i;
 		}
-		if (i == json.length()) {
+		if (i == json.length())
 			obj_type = JElemType.JT_INVAL;
-			return obj_type;
-		} else if (json.charAt(i) == '{')
+		 else if (json.charAt(i) == '{')
 			obj_type = JElemType.JT_OBJ;
 		else if (json.charAt(i) == '[')
 			obj_type = JElemType.JT_ARRAY;
@@ -389,9 +417,8 @@ public class JsonUtils {
 			obj_type = JElemType.JT_BOOL;
 		else if (is_num(json, i))
 			obj_type = JElemType.JT_NUM;
-		else {
+		else
 			obj_type = JElemType.JT_INVAL;
-		}
 		return obj_type;
 	}
 
@@ -409,18 +436,16 @@ public class JsonUtils {
 		}
 		data = new String(Files.readAllBytes(Paths.get(args[0])));
 		field_name = args[1];
-		// Check if the required object is present.
-		//if (!is_valid_member(data, "formed"))
-		//	return null;
-		// Identify the type of the required object.
+		/* Identify the type of the required object. */
 		obj_type = elem_type_identify(data, field_name);
-		//if (obj_type == JElemType.JT_INVAL)
-		//	return null;
-		// Create an instance of required object type.
+		if (obj_type == JElemType.JT_INVAL) {
+			System.out.println("invalid object type.");
+			return;
+		}
+		/* Create an instance of required object type. */
 		obj = json_elem_create(data, field_name, obj_type);
 		if (obj == null)
-			System.out.println("invalid input string");
-		else
-			System.out.println(obj.je_content);
+			return;
+		System.out.println(obj.je_content);
 	}
 }
